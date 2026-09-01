@@ -115,57 +115,28 @@ async def send_uart_byte(dut, data):
 
 async def capture_uart_byte(dut):
     """
-    Capture one UART byte from uo_out[0].
+    Capture one UART byte from the participant's UART TX output.
 
-    Cocotb 2.x does not allow an Edge trigger directly on an
-    indexed packed signal such as:
-
-        FallingEdge(dut.uo_out[0])
-
-    Therefore, the complete uo_out vector is monitored and
-    bit 0 is checked after each value transition.
-
-    This reproduces the capture_uart_byte() task from
-    tb_tt_um_crypto_led_demo.v.
+    uo_out[0] is exposed as the scalar tb.uart_txd signal in tb.v
+    because Cocotb 2.x requires scalar LogicObject handles for
+    edge-based triggers.
     """
 
     bit_time_ns = CLKS_PER_BIT * CLK_PERIOD_NS
 
-    # --------------------------------------------------------
     # Wait for UART TXD start bit.
-    #
-    # uo_out[0] = UART TXD
     # UART idle = 1
-    # Start bit = 0
-    # --------------------------------------------------------
-    while True:
-        await FallingEdge(dut.uo_out)
+    # UART start bit = 0
+    await FallingEdge(dut.uart_txd)
 
-        uo_value = int(dut.uo_out.value)
-
-        if (uo_value & 0x01) == 0:
-            break
-
-    # --------------------------------------------------------
     # Move to the middle of the first data bit.
-    #
-    # Original Verilog testbench:
-    #
-    # #(CLKS_PER_BIT * CLK_PERIOD * 1.5);
-    # --------------------------------------------------------
     await Timer(int(bit_time_ns * 1.5), unit="ns")
 
     data = 0
 
-    # --------------------------------------------------------
     # Capture 8 data bits, LSB first.
-    # --------------------------------------------------------
     for i in range(8):
-
-        uo_value = int(dut.uo_out.value)
-
-        bit = uo_value & 0x01
-
+        bit = int(dut.uart_txd.value)
         data |= bit << i
 
         await Timer(bit_time_ns, unit="ns")
